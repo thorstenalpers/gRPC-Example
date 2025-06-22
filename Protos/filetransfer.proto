@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+option csharp_namespace = "GrpcFileTransfer";
+
+service FileUpload {
+  rpc Upload(stream FileChunk) returns (UploadStatus);
+}
+
+message FileChunk {
+  bytes data = 1;
+  string fileName = 2;
+  int32 chunkNumber = 3;
+}
+
+message UploadStatus {
+  bool success = 1;
+  string message = 2;
+}
