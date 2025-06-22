@@ -1,58 +1,62 @@
 using Grpc.Core;
-using GrpcFileTransfer;
 
-namespace Server.Services
+public class FileUploadService(IWebHostEnvironment env) : FileUpload.FileUploadBase
 {
-    public class FileUploadService(IWebHostEnvironment env) : FileUpload.FileUploadBase
+    private readonly IWebHostEnvironment _env = env;
+    private const int BufferSize = 4 * 1024; // 4 KB
+
+    public override async Task<UploadStatus> Upload(IAsyncStreamReader<FileChunk> requestStream, ServerCallContext context)
     {
-        private readonly IWebHostEnvironment _env = env;
-        private const int BufferSize = 4 * 1024; // 4 KB
+        var uploadsPath = Path.Combine(_env.ContentRootPath, "UploadedFiles");
+        Directory.CreateDirectory(uploadsPath);
 
-        public override async Task<UploadStatus> Upload(IAsyncStreamReader<FileChunk> requestStream, ServerCallContext context)
+        string? filePath = null;
+        FileStream? fileStream = null;
+
+        try
         {
-            var uploadsPath = Path.Combine(_env.ContentRootPath, "UploadedFiles");
-            Directory.CreateDirectory(uploadsPath);
-
-            string? filePath = null;
-            FileStream? fileStream = null;
-
-            try
+            await foreach (var chunk in requestStream.ReadAllAsync())
             {
-                await foreach (var chunk in requestStream.ReadAllAsync())
+                if (fileStream == null)
                 {
-                    if (fileStream == null)
-                    {
-                        filePath = Path.Combine(uploadsPath, chunk.FileName);
+                    filePath = Path.Combine(uploadsPath, chunk.FileName);
 
-                        fileStream = new FileStream(
-                            filePath,
-                            FileMode.Create,
-                            FileAccess.Write,
-                            FileShare.None,
-                            BufferSize,
-                            useAsync: true);
-                    }
-                    await fileStream.WriteAsync(chunk.Data.ToByteArray());
+                    fileStream = new FileStream(
+                        filePath,
+                        FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        BufferSize,
+                        useAsync: true);
                 }
-
-                if (fileStream != null)
-                {
-                    await fileStream.FlushAsync();
-                    await fileStream.DisposeAsync();
-                    return new UploadStatus { Success = true, Message = $"Datei erfolgreich gespeichert: {filePath}" };
-                }
-                else
-                {
-                    return new UploadStatus { Success = false, Message = "Keine Daten empfangen." };
-                }
+                await fileStream.WriteAsync(chunk.Data.ToByteArray());
             }
-            catch (Exception ex)
-            {
-                if (fileStream != null)
-                    await fileStream.DisposeAsync();
 
-                return new UploadStatus { Success = false, Message = $"Fehler: {ex.Message}" };
+            if (fileStream != null)
+            {
+                await fileStream.FlushAsync();
+                await fileStream.DisposeAsync();
+                return new UploadStatus { Success = true, Message = $"Datei erfolgreich gespeichert: {filePath}" };
+            }
+            else
+            {
+                return new UploadStatus { Success = false, Message = "Keine Daten empfangen." };
             }
         }
+        catch (Exception ex)
+        {
+            if (fileStream != null)
+                await fileStream.DisposeAsync();
+
+            return new UploadStatus { Success = false, Message = $"Fehler: {ex.Message}" };
+        }
+    }
+
+    public override Task<PingReply> Ping(PingRequest request, ServerCallContext context)
+    {
+        return Task.FromResult(new PingReply
+        {
+            Status = "OK"
+        });
     }
 }

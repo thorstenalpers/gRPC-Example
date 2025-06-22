@@ -1,6 +1,5 @@
 using Google.Protobuf;
 using Grpc.Core;
-using GrpcFileTransfer;
 using System.Net.Http.Headers;
 
 namespace Client.Services;
@@ -59,5 +58,18 @@ public class FileUploadService(FileUpload.FileUploadClient client, string server
 
         var response = await httpClient.PostAsync($"{_serverAddress}/api/upload", form);
         var content = await response.Content.ReadAsStringAsync();
+    }
+
+    public async Task<bool> PingGrpcAsync()
+    {
+        try
+        {
+            var reply = await _client.PingAsync(new PingRequest());
+            return reply.Status == "OK";
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

@@ -1,5 +1,4 @@
 ﻿using Client.Services;
-using GrpcFileTransfer;
 using System.Diagnostics;
 
 string serverAddress = "https://localhost:7275";
@@ -16,6 +15,9 @@ var client = new FileUpload.FileUploadClient(channel);
 
 var fileUploadService = new FileUploadService(client, serverAddress);
 var fileGenerationService = new FileGenerationService();
+
+// make a ping to ensure the server is reachable and init connection
+var pingResult = await fileUploadService.PingGrpcAsync();
 
 await fileGenerationService.GenerateTextFileAsync(fileSizeInMB, filePath);
 
